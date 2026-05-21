@@ -2,10 +2,11 @@ import gradio as gr
 import json
 from services.llm_service import extract_prescription
 from services.parser import parse_json
+from services.voice_service import transcribe_audio
 from dotenv import load_dotenv
 load_dotenv()
 
-# ── helpers ──────────────────────────────────────────────────────────────────
+# ── helpers ───────────────────────────────────────────────────────────────────
 
 def process_image(image):
     """Send image to MedGemma API and return structured result."""
@@ -223,14 +224,28 @@ body, .gradio-container {
     margin-right: 6px;
 }
 
+/* voice section */
+.voice-badge {
+    display: inline-block;
+    background: #eff6ff;
+    color: #2563eb;
+    border: 1px solid #bfdbfe;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 4px 14px;
+    margin-bottom: 14px;
+    letter-spacing: .5px;
+}
+
 footer { display: none !important; }
 """
 
 # ── UI ────────────────────────────────────────────────────────────────────────
 
-with gr.Blocks(css=CSS, title="Prescription Extractor") as demo:
+with gr.Blocks( title="Prescription Extractor") as demo:
 
-    # Header
+    # ── Header ────────────────────────────────────────────────────────────────
     gr.HTML("""
     <div class="rx-header">
       <div class="badge">✦ Powered by MedGemma 4B</div>
@@ -239,9 +254,10 @@ with gr.Blocks(css=CSS, title="Prescription Extractor") as demo:
     </div>
     """)
 
+    # ── Section 1: Prescription Image ─────────────────────────────────────────
     with gr.Row(equal_height=False):
 
-        # ── LEFT: Upload ──────────────────────────────────────────────────────
+        # LEFT: Upload
         with gr.Column(scale=1):
             gr.HTML('<div class="panel-title">Upload Prescription</div>')
 
@@ -271,28 +287,19 @@ with gr.Blocks(css=CSS, title="Prescription Extractor") as demo:
             </div>
             """)
 
-        # ── RIGHT: Results ────────────────────────────────────────────────────
+        # RIGHT: Results
         with gr.Column(scale=1):
             gr.HTML('<div class="panel-title">Extracted Data</div>')
 
-            # Error banner (hidden by default)
             error_box = gr.HTML(value="", visible=False)
 
-            # Results block (hidden by default)
             with gr.Column(visible=False) as results_col:
-
-                # Patient / Doctor / Date meta chips
                 meta_html = gr.HTML("")
-
-                # Medications cards
                 gr.HTML('<div style="font-size:12px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:.6px;margin:4px 0 10px;">Medications</div>')
                 meds_html = gr.HTML("")
-
-                # Raw JSON accordion
                 with gr.Accordion("Raw JSON output", open=False):
                     raw_json = gr.JSON(label="")
 
-            # Placeholder when nothing loaded
             placeholder = gr.HTML("""
             <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;
                         min-height:420px;color:#cbd5e1;text-align:center;gap:12px;">
@@ -304,31 +311,81 @@ with gr.Blocks(css=CSS, title="Prescription Extractor") as demo:
             </div>
             """)
 
-    # ── State ─────────────────────────────────────────────────────────────────
-    state = gr.State(None)
+    # ── Divider ───────────────────────────────────────────────────────────────
+    gr.HTML('<hr style="margin:40px 0;border:none;border-top:1px solid #e2e8f0;">')
 
-    # ── Event handlers ────────────────────────────────────────────────────────
+    # ── Section 2: Voice Transcription ────────────────────────────────────────
+    gr.HTML("""
+    <div class="rx-header">
+      <div class="voice-badge">🎙 NEW · Groq Whisper</div>
+      <h1 style="font-size:28px;">Doctor–Patient Conversation</h1>
+      <p>Record the conversation and get a full transcript instantly.</p>
+    </div>
+    """)
+
+    with gr.Row(equal_height=False):
+
+        # LEFT: Record
+        with gr.Column(scale=1):
+            gr.HTML('<div class="panel-title">Record Conversation</div>')
+
+            audio_input = gr.Audio(
+                sources=["microphone"],
+                type="filepath",
+                label="",
+                show_label=False,
+            )
+
+            transcribe_btn = gr.Button(
+                "🎙  Transcribe Conversation",
+                elem_classes="btn-extract"
+            )
+
+            clear_audio_btn = gr.ClearButton(
+                value="✕  Clear",
+                components=[],
+                elem_classes="btn-clear"
+            )
+
+            gr.HTML("""
+            <div style="margin-top:16px;padding:12px 14px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;">
+              <div style="font-size:11px;font-weight:600;color:#1e40af;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Supported audio</div>
+              <div style="font-size:13px;color:#1d4ed8;line-height:1.6;">MP3 · MP4 · WAV · M4A · WEBM · OGG</div>
+            </div>
+            """)
+
+        # RIGHT: Transcript
+        with gr.Column(scale=1):
+            gr.HTML('<div class="panel-title">Transcript</div>')
+
+            transcript_output = gr.Textbox(
+                label="",
+                placeholder="Transcript will appear here after recording...",
+                lines=15,
+                show_label=False,
+                
+            )
+
+    # ── State & Event Handlers ────────────────────────────────────────────────
+    state = gr.State(None)
 
     def on_extract(image):
         if image is None:
             return (
-                gr.update(visible=False),   # error_box
-                gr.update(visible=False),   # results_col
-                gr.update(visible=True),    # placeholder
-                "",                          # meta_html
-                "",                          # meds_html
-                None,                        # raw_json
-                gr.update(value='<div class="error-banner"><strong>No image uploaded.</strong>Please upload a prescription image first.</div>', visible=True)
+                gr.update(value='<div class="error-banner"><strong>No image uploaded.</strong> Please upload a prescription image first.</div>', visible=True),
+                gr.update(visible=False),
+                gr.update(visible=True),
+                "", "", None,
+                gr.update(visible=False)
             )
 
         raw = extract_prescription(image)
         data = parse_json(raw)
 
-        # Error case
         if isinstance(data, dict) and data.get("error"):
             msg = data.get("message", "Unknown error occurred.")
             hint = data.get("hint", "")
-            html = f'<div class="error-banner"><strong>⚠ Error</strong>{msg}'
+            html = f'<div class="error-banner"><strong>⚠ Error</strong> {msg}'
             if hint:
                 html += f'<br><span style="opacity:.75">{hint}</span>'
             html += "</div>"
@@ -340,7 +397,6 @@ with gr.Blocks(css=CSS, title="Prescription Extractor") as demo:
                 gr.update(visible=False)
             )
 
-        # Build meta chips
         patient = data.get("patient_name") or "—"
         doctor = data.get("prescriber_name") or "—"
         date = data.get("prescription_date") or "—"
@@ -350,22 +406,10 @@ with gr.Blocks(css=CSS, title="Prescription Extractor") as demo:
 
         meta = f"""
         <div class="meta-row">
-          <div class="meta-chip">
-            <div class="label">Patient</div>
-            <div class="value">{patient}</div>
-          </div>
-          <div class="meta-chip">
-            <div class="label">Prescriber</div>
-            <div class="value">{doctor}</div>
-          </div>
-          <div class="meta-chip">
-            <div class="label">Date</div>
-            <div class="value">{date}</div>
-          </div>
-          <div class="meta-chip">
-            <div class="label">Latency</div>
-            <div class="value">{latency_str}</div>
-          </div>
+          <div class="meta-chip"><div class="label">Patient</div><div class="value">{patient}</div></div>
+          <div class="meta-chip"><div class="label">Prescriber</div><div class="value">{doctor}</div></div>
+          <div class="meta-chip"><div class="label">Date</div><div class="value">{date}</div></div>
+          <div class="meta-chip"><div class="label">Latency</div><div class="value">{latency_str}</div></div>
         </div>
         <div style="font-size:11px;color:#94a3b8;margin-bottom:12px;">
           <span class="status-dot"></span>Extracted via {model}
@@ -375,13 +419,11 @@ with gr.Blocks(css=CSS, title="Prescription Extractor") as demo:
         meds = format_medications(data)
 
         return (
-            gr.update(visible=False),       # error_box
-            gr.update(visible=True),        # results_col
-            gr.update(visible=False),       # placeholder
-            meta,                            # meta_html
-            meds,                            # meds_html
-            data,                            # raw_json
-            gr.update(visible=False)         # error_box (redundant safety)
+            gr.update(visible=False),
+            gr.update(visible=True),
+            gr.update(visible=False),
+            meta, meds, data,
+            gr.update(visible=False)
         )
 
     def on_clear():
@@ -398,6 +440,10 @@ with gr.Blocks(css=CSS, title="Prescription Extractor") as demo:
     extract_btn.click(fn=on_extract, inputs=image_input, outputs=outputs)
     clear_btn.click(fn=on_clear, inputs=None, outputs=outputs)
 
+    # Voice events
+    transcribe_btn.click(fn=transcribe_audio, inputs=audio_input, outputs=transcript_output)
+    clear_audio_btn.click(fn=lambda: "", inputs=None, outputs=transcript_output)
+
 
 if __name__ == "__main__":
-    demo.launch()
+    demo.launch(css=CSS)
