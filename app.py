@@ -1,6 +1,7 @@
-from services.ocr_service import extract_text
 from services.llm_service import extract_prescription
 from services.parser import parse_json
+import json
+import sys
 
 
 IMAGE_PATH = "fixtures/test.png"
@@ -8,21 +9,19 @@ IMAGE_PATH = "fixtures/test.png"
 
 def main():
 
-    print("Running OCR...")
+    path = sys.argv[1] if len(sys.argv) > 1 else IMAGE_PATH
 
-    ocr_text = extract_text(IMAGE_PATH)
+    print(f"\n📄 Processing: {path}")
+    print("─" * 50)
 
-    print("\nOCR TEXT:\n")
-    print(ocr_text)
+    print("🔍 Sending to MedGemma API...")
+    raw = extract_prescription(path)
 
-    print("\nRunning LLM Extraction...\n")
+    print("🧩 Parsing response...")
+    parsed = parse_json(raw)
 
-    response = extract_prescription(ocr_text)
-
-    parsed = parse_json(response)
-
-    print("\nFINAL JSON:\n")
-    print(parsed)
+    print("\n✅ FINAL OUTPUT:\n")
+    print(json.dumps(parsed, indent=2))
 
 
 if __name__ == "__main__":
