@@ -447,16 +447,3 @@ Depending on your environment or constraints, here are drop-in alternatives for 
 - Not validated for prescription formats outside of English or standard Western medical notation
 
 ---
-
-## 📄 License
-
-This project is a research prototype. Add your license here before public distribution.
-
----
-
-## 🙏 Acknowledgements
-
-- [MedGemma](https://ai.google.dev/gemma/docs/medgemma) by Google DeepMind
-- [Groq](https://groq.com) for ultra-fast Whisper inference
-- [Gradio](https://gradio.app) by Hugging Face
-- [EasyOCR](https://github.com/JaidedAI/EasyOCR) by Jaided AI
